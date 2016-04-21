@@ -1,0 +1,24 @@
+[general]
+context=internal
+register => <USER:SECRET@GATEWAY:PORT>
+disallow=all
+allow=ulaw
+allow=alaw
+allow=gsm
+canreinvite=no
+nat=yes
+
+[voipms]
+context=internal
+type=friend
+host=<GATEWAY>
+username=<USER>
+secret=<SECRET>
+canreinvite=no
+disallow=all
+allow=ulaw
+fromuser=<USER>
+trustrpid=yes
+sendrpid=yes
+insecure=invite
+nat=yes
