@@ -14,5 +14,6 @@ question="Question <break strength='strong'/>
 tts $output_fname $question >/dev/null 2>&1
 
 if [ ! -f "$output_fname" ]; then
+    echo "tts failed to output $output_fname" >&2
     exit 1
 fi
