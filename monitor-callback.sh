@@ -21,6 +21,13 @@ rm -f $1 $2
 question_fname="$(dirname $3)/$(basename -s .wav $3)-question.wav";
 rm -f $question_fname
 
+# Do not upload calls from weird numbers
+phone_num=$(basename $3 | cut -d'-' -f4)
+if [ ${#phone_num} -lt 10 ]; then
+    echo "Not uploading call from phone_num=${phone_num}" >&2
+    exit 1
+fi
+
 # Get SoundCloud auth token
 auth_token=$(curl -sX POST 'https://api.soundcloud.com/oauth2/token' \
     -F "client_id=${sc_client_id}" \
