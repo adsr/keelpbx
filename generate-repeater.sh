@@ -1,16 +1,16 @@
 #!/bin/bash
-
 this_dir=$(dirname $(readlink -f ${BASH_SOURCE[0]}))
 
-# Check for output argument
-output_fname=$1
-if [ -z "$output_fname" ]; then
-    echo "Usage: ./generate-speaker.sh <output_fname>"
+# Check for arguments
+phone_num=$1
+output_fname=$2
+if [ -z "$phone_num" -o -z "$output_fname" ]; then
+    echo "Usage: ./generate-speaker.sh <phone_num> <output_fname>"
     exit 1
 fi
 
-# Get last incoming call
-speaker_fname=$(ls -1t "$this_dir/recordings/" | grep 'in.wav$' | head -n1)
+# Get random incoming call not from caller
+speaker_fname=$(ls -1 "$this_dir/recordings/" | grep '\.wav$' | grep -v $phone_num | grep -Pv '(playback|tmp|out)' | shuf -n1)
 speaker_fname="$this_dir/recordings/$speaker_fname"
 
 # Copy to output_fname

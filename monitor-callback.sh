@@ -1,42 +1,55 @@
 #!/bin/bash
+this_dir=$(dirname $(readlink -f ${BASH_SOURCE[0]}))
 
 # Set vars
 snd_them=$1
 snd_us=$2
 snd_mix=$3
+snd_tmp1="${snd_mix}.tmp1.wav"
+snd_tmp2="${snd_mix}.tmp2.wav"
+min_len=3
 phone_num=$(basename $snd_mix | cut -d'-' -f4)
-question_fname="$(dirname $snd_mix)/$(basename -s .wav $snd_mix)-question.wav";
-this_dir=$(dirname $(readlink -f ${BASH_SOURCE[0]}))
+playback_fname="$(dirname $snd_mix)/$(basename -s .wav $snd_mix)-playback.wav";
 sc_auth_path="$this_dir/soundcloud-auth.sh"
 
-# Source SoundCloud auth vars
-if [ ! -f "$sc_auth_path" ]; then
-    echo "SoundCloud auth file not found at $sc_auth_path" >&2
-    exit 1
-fi
+# Define die function
+die() { echo "$@" >&2; exit 1; }
+
+# Define cleanup function to run on exit
+cleanup() { rm -f $playback_fname $snd_tmp1 $snd_tmp2 $snd_us; }
+trap cleanup EXIT
+
+# Source SoundCloud auth var
+test -f "$sc_auth_path" || die "SoundCloud auth file not found at $sc_auth_path"
 source $sc_auth_path
 
+# Ensure snd_them is not silent
+sox $snd_them $snd_tmp1 silence 1 0.1 1% &>/dev/null || die "sox failed to trim snd_them (1)"
+sox $snd_tmp1 $snd_tmp2 reverse          &>/dev/null || die "sox failed to reverse snd_them (1)"
+sox $snd_tmp2 $snd_tmp1 silence 1 0.1 1% &>/dev/null || die "sox failed to trim snd_them (2)"
+sox $snd_tmp1 $snd_tmp2 reverse          &>/dev/null || die "sox failed to reverse snd_them (2)"
+them_len=$(sox $snd_tmp2 -n stat 2>&1 | grep Length | awk '{print $3}' | cut -d'.' -f1)
+if [ "$them_len" -le "$min_len" ]; then
+    snd_them_silent="${snd_them}.silent"
+    mv $snd_them $snd_them_silent
+    die "Not uploading short call; snd_them=$snd_them_silent them_len=${them_len}"
+fi
+
 # Mix into single audio file
-sox -m $snd_us $snd_them $snd_mix gain -n -l 6 >/dev/null 2>&1
-if [ $? -ne 0 ]; then
-    echo "sox failed to mix audio" >&2
-    exit 1
-fi
-rm -f $snd_us
+sox -m $snd_us $snd_them $snd_mix gain -n -l 3 &>/dev/null || die "sox failed to mix snd_mix"
 
-# Remove question wav
-question_len=$(sox $question_fname -n stat 2>&1 | grep Length | awk '{print $3}' | cut -d'.' -f1)
-question_len=$((question_len+0))
-rm -f $question_fname
+# Trim both ends of mix
+sox $snd_mix  $snd_tmp1 silence 1 0.1 1% &>/dev/null || die "sox failed to trim snd_mix (1)"
+sox $snd_tmp1 $snd_tmp2 reverse          &>/dev/null || die "sox failed to reverse snd_mix (1)"
+sox $snd_tmp2 $snd_tmp1 silence 1 0.1 1% &>/dev/null || die "sox failed to trim snd_mix (2)"
+sox $snd_tmp1 $snd_mix  reverse          &>/dev/null || die "sox failed to reverse snd_mix (2)"
 
-# Do not upload hang-up calls
-mix_len=$(sox $snd_mix -n stat 2>&1 | grep Length | awk '{print $3}' | cut -d'.' -f1)
-mix_len=$((mix_len-2))
-if [ "$mix_len" -le "$question_len" ]; then
-    echo "Discarding hang-up call from phone_num=${phone_num}" >&2
-    rm -f $snd_them $snd_mix
-    exit 1
-fi
+# Trim silence from beginning of in audio
+sox $snd_them $snd_tmp1 silence 1 0.1 1% &>/dev/null || die "sox failed to trim in audio"
+cp -f $snd_tmp1 $snd_them
+
+# Bail early if KEELPBX_NO_SC
+[ -n "$KEELPBX_NO_SC" ] && die "Bailing early because KEELPBX_NO_SC==$KEELPBX_NO_SC"
 
 # Get SoundCloud auth token
 auth_token=$(curl -sX POST 'https://api.soundcloud.com/oauth2/token' \
@@ -46,10 +59,7 @@ auth_token=$(curl -sX POST 'https://api.soundcloud.com/oauth2/token' \
     -F "username=${sc_username}" \
     -F "password=${sc_password}" | \
     grep -Po '(?<="access_token":")[^"]+(?=")')
-if [ -z "$auth_token" ]; then
-    echo "Failed to get auth token from SoundCloud" >&2
-    exit 1
-fi
+[ -z "$auth_token" ] && die "Failed to get auth token from SoundCloud"
 
 # Upload audio to SoundCloud
 track_name=$(date +'%F-%H%M%S')
@@ -58,7 +68,7 @@ curl --fail -sX POST 'https://api.soundcloud.com/tracks.json' \
     -F "track[asset_data]=@${snd_mix}" \
     -F "track[title]=${track_name}" \
     -F 'track[sharing]=public' >/dev/null
-if [ $? -ne 0 ]; then
-    echo "Possibly failed to upload audio to SoundCloud" >&2
-fi
-echo "$snd_mix -> $track_name"
+[ $? -ne 0 ] && die "Failed to upload audio to SoundCloud"
+
+# Fin
+echo "Uploaded! $snd_mix -> $track_name"
