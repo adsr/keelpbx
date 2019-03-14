@@ -10,7 +10,9 @@ if [ -z "$phone_num" -o -z "$output_fname" ]; then
 fi
 
 # Get random incoming call not from caller
-speaker_fname=$(ls -1 "$this_dir/recordings/" | grep '\.wav$' | grep -v $phone_num | grep -Pv '(playback|tmp|out)' | shuf -n1)
+# Only look at `$last_n` recordings
+last_n=60
+speaker_fname=$(ls -1t "$this_dir/recordings/" | grep '\.wav$' | grep -v $phone_num | grep -Pv '(playback|tmp|out)' | head -n $last_n | shuf -n1)
 speaker_fname="$this_dir/recordings/$speaker_fname"
 
 # Copy to output_fname
