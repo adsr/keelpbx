@@ -1,2 +1,3 @@
 etc/asterisk/sip.conf
 soundcloud-auth.sh
+recordings/*
