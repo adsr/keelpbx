@@ -10,7 +10,6 @@ snd_tmp2="${snd_mix}.tmp2.wav"
 min_len=3
 phone_num=$(basename $snd_mix | cut -d'-' -f4)
 playback_fname="$(dirname $snd_mix)/$(basename -s .wav $snd_mix)-playback.wav";
-sc_auth_path="$this_dir/soundcloud-auth.sh"
 
 # Define die function
 die() { echo "$@" >&2; exit 1; }
@@ -18,10 +17,6 @@ die() { echo "$@" >&2; exit 1; }
 # Define cleanup function to run on exit
 cleanup() { rm -f $playback_fname $snd_tmp1 $snd_tmp2 $snd_us; }
 trap cleanup EXIT
-
-# Source SoundCloud auth var
-test -f "$sc_auth_path" || die "SoundCloud auth file not found at $sc_auth_path"
-source $sc_auth_path
 
 # Ensure snd_them is not silent
 sox $snd_them $snd_tmp1 silence 1 0.1 1% &>/dev/null || die "sox failed to trim snd_them (1)"
@@ -51,24 +46,9 @@ cp -f $snd_tmp1 $snd_them
 # Bail early if KEELPBX_NO_SC
 [ -n "$KEELPBX_NO_SC" ] && die "Bailing early because KEELPBX_NO_SC==$KEELPBX_NO_SC"
 
-# Get SoundCloud auth token
-auth_token=$(curl -sX POST 'https://api.soundcloud.com/oauth2/token' \
-    -F "client_id=${sc_client_id}" \
-    -F "client_secret=${sc_client_secret}" \
-    -F "grant_type=password" \
-    -F "username=${sc_username}" \
-    -F "password=${sc_password}" | \
-    grep -Po '(?<="access_token":")[^"]+(?=")')
-[ -z "$auth_token" ] && die "Failed to get auth token from SoundCloud"
-
-# Upload audio to SoundCloud
+# Invoke upload script
 track_name=$(date +'%F-%H%M%S')
-curl --fail -sX POST 'https://api.soundcloud.com/tracks.json' \
-    -F "oauth_token=${auth_token}" \
-    -F "track[asset_data]=@${snd_mix}" \
-    -F "track[title]=${track_name}" \
-    -F 'track[sharing]=public' >/dev/null
-[ $? -ne 0 ] && die "Failed to upload audio to SoundCloud"
+$this_dir/upload.sh "$snd_mix" "$track_name" || die "Failed to upload $snd_mix"
 
 # Fin
 echo "Uploaded! $snd_mix -> $track_name"

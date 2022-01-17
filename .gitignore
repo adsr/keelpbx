@@ -1,3 +1,4 @@
 etc/asterisk/sip.conf
-soundcloud-auth.sh
 recordings/*
+upload.sh
+keelpbx.log

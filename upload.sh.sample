@@ -1,0 +1,16 @@
+#!/bin/bash
+this_dir=$(dirname $(readlink -f ${BASH_SOURCE[0]}))
+
+# Set vars
+snd_mix=$1
+track_name=$2
+
+# Check params
+if ! [ -f "$snd_mix" -o -z "$track_name" ]; then
+    echo "Usage: ./upload.sh.sample <audio_file> <track_name>"
+    exit 1
+fi
+
+# Upload $snd_mix somewhere as $track_name...
+echo "Not implemented"
+exit 1
